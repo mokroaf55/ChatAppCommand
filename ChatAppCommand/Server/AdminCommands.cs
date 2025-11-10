@@ -1,62 +1,47 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Linq;
 
-namespace ChatServerApp
+namespace ChatAppServer
 {
-    public class AdminCommands
+    public static class AdminCommands
     {
-        private ChatServer server;
-
-        public AdminCommands(ChatServer server)
+        public static void Execute(string command)
         {
-            this.server = server;
-        }
+            string[] parts = command.Split(' ');
+            string cmd = parts[0].ToLower();
 
-        public void Execute(string command, ClientHandler sender)
-        {
-            string[] parts = command.Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 0) return;
-
-            switch (parts[0].ToLower())
+            switch (cmd)
             {
-                case "/ban":
+                case "/broadcast":
                     if (parts.Length < 2)
                     {
-                        sender.SendMessage("Using: /ban <user name>");
+                        Console.WriteLine("Вкажіть повідомлення для розсилки.");
                         return;
                     }
-                    server.BanUser(parts[1], sender);
+                    string message = string.Join(' ', parts.Skip(1));
+                    ChatServer.Broadcast($"[Адмін]: {message}", null);
                     break;
 
                 case "/kick":
                     if (parts.Length < 2)
                     {
-                        sender.SendMessage("Using: /kick <user name>");
+                        Console.WriteLine("Вкажіть ім'я користувача для кікання.");
                         return;
                     }
-                    server.KickUser(parts[1], sender);
+                    ChatServer.KickUser(parts[1]);
                     break;
 
-                case "/msg":
-                    if (parts.Length < 3)
-                    {
-                        sender.SendMessage("Using: /msg <ім'я> <message>");
-                        return;
-                    }
-                    server.PrivateMessage(parts[1], parts[2], sender);
-                    break;
-
-                case "/all":
+                case "/ban":
                     if (parts.Length < 2)
                     {
-                        sender.SendMessage("Using: /all <message>");
+                        Console.WriteLine("Вкажіть ім'я користувача для бану.");
                         return;
                     }
-                    server.Broadcast($"[ADMIN]: {parts[1]}", sender);
+                    ChatServer.BanUser(parts[1]);
                     break;
 
                 default:
-                    sender.SendMessage("Unknown team.");
+                    Console.WriteLine("Невідома команда адміністратора.");
                     break;
             }
         }

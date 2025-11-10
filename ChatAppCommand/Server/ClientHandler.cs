@@ -1,97 +1,86 @@
 ﻿using System;
 using System.IO;
 using System.Net.Sockets;
-using System.Text;
 
-namespace ChatServerApp
+namespace ChatAppServer
 {
     public class ClientHandler
     {
         private TcpClient client;
-        private ChatServer server;
         private StreamReader reader;
         private StreamWriter writer;
-        public string UserName { get; private set; }
-        public bool IsAdmin { get; private set; }
-        public bool IsBanned { get; set; }
+        public string UserName { get; private set; } = "";
+        private bool isAdmin = false;
 
-        public ClientHandler(TcpClient client, ChatServer server)
+        public ClientHandler(TcpClient tcpClient)
         {
-            this.client = client;
-            this.server = server;
-            NetworkStream stream = client.GetStream();
-            reader = new StreamReader(stream, Encoding.UTF8);
-            writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
+            client = tcpClient;
+            var stream = client.GetStream();
+            reader = new StreamReader(stream);
+            writer = new StreamWriter(stream) { AutoFlush = true };
         }
 
-        public void Handle()
+        public void HandleClient()
         {
             try
             {
-                writer.WriteLine("Enter your username.:");
-                UserName = reader.ReadLine();
+                writer.WriteLine("Введіть своє ім'я:");
+                string name = reader.ReadLine();
 
-                if (UserName.ToLower() == "admin")
+                if (ChatServer.IsBanned(name))
                 {
-                    IsAdmin = true;
-                    writer.WriteLine("You are logged in as an administrator..");
-                }
-                else
-                {
-                    writer.WriteLine($"Welcome, {UserName}!");
+                    writer.WriteLine("Вас забанено. Вхід заборонено.");
+                    client.Close();
+                    return;
                 }
 
-                Console.WriteLine($"{UserName} connected to the server.");
+                UserName = name;
+                if (UserName.Equals("admin", StringComparison.OrdinalIgnoreCase))
+                {
+                    isAdmin = true;
+                    writer.WriteLine("Ви увійшли як адміністратор. Команди: /ban [ім'я], /exit");
+                }
+
+                ChatServer.AddClient(this);
+                Console.WriteLine($"{UserName} приєднався до чату.");
+                ChatServer.Broadcast($"{UserName} приєднався до чату!", this);
 
                 string message;
                 while ((message = reader.ReadLine()) != null)
                 {
-                    if (IsBanned)
-                    {
-                        writer.WriteLine("You are blocked on the server..");
+                    if (isAdmin && message.StartsWith("/ban "))
+                        ChatServer.BanUser(message.Substring(5));
+                    else if (isAdmin && message.StartsWith("/exit"))
                         break;
-                    }
-
-                    if (IsAdmin && message.StartsWith("/"))
-                    {
-                        server.AdminCommand(message, this);
-                    }
                     else
                     {
-                        string formatted = $"{UserName}: {message}";
-                        Console.WriteLine(formatted);
-                        server.Broadcast(formatted, this);
+                        string fullMessage = $"{UserName}: {message}";
+                        Console.WriteLine(fullMessage);
+                        ChatServer.Broadcast(fullMessage, this);
                     }
                 }
             }
             catch
             {
-                Console.WriteLine($"{UserName} disconnected.");
+                // клієнт відключився
             }
             finally
             {
-                Disconnect();
-                server.RemoveClient(this);
+                ChatServer.RemoveClient(this);
+                client.Close();
+                Console.WriteLine($"{UserName} вийшов із чату.");
+                ChatServer.Broadcast($"{UserName} покинув чат.", this);
             }
         }
 
         public void SendMessage(string message)
         {
-            try
-            {
-                writer.WriteLine(message);
-            }
-            catch
-            {
-                Disconnect();
-            }
+            try { writer.WriteLine(message); } catch { }
         }
 
         public void Disconnect()
         {
-            reader?.Close();
-            writer?.Close();
-            client?.Close();
+            try { client.Close(); } catch { }
         }
     }
 }
